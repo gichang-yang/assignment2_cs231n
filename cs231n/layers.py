@@ -52,7 +52,7 @@ def affine_backward(dout, cache):
     x, w, b = cache
     dx, dw, db = None, None, None
     dx = np.matmul(dout,np.transpose(w)).reshape(x.shape)
-    dw = np.matmul(np.transpose(np.reshape(x,(x.shpe[0],-1))),dout)
+    dw = np.matmul(np.transpose(np.reshape(x,(x.shape[0],-1))),dout)
     db = b
     ###########################################################################
     # Implement the affine backward pass.                               #
@@ -77,7 +77,8 @@ def relu_forward(x):
     """
     out = None
 
-    out = x + np.fabs(x) * 0.5
+    out = np.zeros_like(x)
+    np.putmask(out,x>0,x)
     ###########################################################################
     # Implement the ReLU forward pass.                                  #
     ###########################################################################

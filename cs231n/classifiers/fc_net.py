@@ -37,8 +37,10 @@ class TwoLayerNet(object):
         - reg: Scalar giving L2 regularization strength.
         """
         self.params = {
-            'W1':np.full(shape=(input_dim,hidden_dim),fill_value=np.random.random_integers(0,1)) * weight_scale,
-            'W2':np.full(shape=(hidden_dim,num_classes),fill_value=np.random.random_integers(0,1)) * weight_scale,
+            #'W1':np.random.normal(scale=weight_scale, size=(input_dim,hidden_dim)),
+            'W1': np.random.randn(input_dim, hidden_dim) * weight_scale,
+            #'W2':np.random.normal(scale=weight_scale, size=(hidden_dim,num_classes)),
+            'W2': np.random.randn(hidden_dim, num_classes) * weight_scale,
             'b1':0,
             'b2':0
         }
@@ -94,7 +96,8 @@ class TwoLayerNet(object):
         dl2,grads['W2'],grads['b2'] = affine_backward(dx,l2cache)
         dl1,grads['W1'],grads['b1'] = affine_relu_backward(dl2,l1Cache)
 
-        loss = l
+        loss = l + np.sum(self.params['W1'] ** 2) * self.reg * 0.5\
+               + np.sum(self.params['W2'] ** 2) * self.reg * 0.5
         ############################################################################
         #  Implement the backward pass for the two-layer net. Store the loss  #
         # in the loss variable and gradients in the grads dictionary. Compute data #
@@ -159,23 +162,23 @@ class FullyConnectedNet(object):
         self.dtype = dtype
         self.params = {
             'W1':np.full(shape=(input_dim,hidden_dims[0]),fill_value=np.random.random_integers(0,1)) * weight_scale,
-            'b1':0,
+            'b1':np.zeros(shape=hidden_dims[0],),
             'gamma1':np.ones(shape=(hidden_dims[0],)),
             'beta1':np.zeros(shape=(hidden_dims[0],)),
         }
 
         for i in range(1,len(hidden_dims)):
-            self.params.setdefault('W'+str(i+1),np.full(shape=(hidden_dims[i-1],hidden_dims[i]),fill_value=np.random.random_integers(0,1)) * weight_scale)
-            self.params.setdefault('b'+str(i+1),np.full(shape=(hidden_dims[i],),fill_value=np.random.random_integers(0,1)) * weight_scale)
+            self.params.setdefault('W'+str(i+1),np.random.randn(hidden_dims[i-1],hidden_dims[i]) * weight_scale)
+            self.params.setdefault('b'+str(i+1),np.random.randn(hidden_dims[i],) * weight_scale)
             self.params.setdefault('gamma'+str(i+1),np.ones(shape=(hidden_dims[i],)))
             self.params.setdefault('beta'+str(i+1),np.zeros(shape=(hidden_dims[i],)))
         self.params.setdefault('W' + str(self.num_layers),
-                               np.full(
-                                   shape=(hidden_dims[len(hidden_dims)-1],num_classes),
-                                   fill_value=np.random.random_integers(0,1)) * weight_scale
+                               np.random.randn(
+                                   hidden_dims[len(hidden_dims)-1],num_classes
+                                   ) * weight_scale
                                )
-        self.params.setdefault('b' + str(self.num_layers), 0)
-
+        self.params.setdefault('b' + str(self.num_layers), np.zeros(shape=(num_classes,)))
+        #print(self.params)
         ############################################################################
         # Initialize the parameters of the network, storing all values in    #
         # the self.params dictionary. Store weights and biases for the first layer #
@@ -196,7 +199,7 @@ class FullyConnectedNet(object):
         # When using dropout we need to pass a dropout_param dictionary to each
         # dropout layer so that the layer knows the dropout probability and the mode
         # (train / test). You can pass the same dropout_param to each dropout layer.
-        self.dropout_param = {}
+        self.dropout_param = {'mode':'test','p':dropout}
         if self.use_dropout:
             self.dropout_param = {'mode': 'train', 'p': dropout}
             if seed is not None:
@@ -209,8 +212,16 @@ class FullyConnectedNet(object):
         # pass of the second batch normalization layer, etc.
         self.bn_params = []
         if self.use_batchnorm:
-            self.bn_params = [{'mode': 'train'} for i in range(self.num_layers - 1)]
-
+            self.bn_params = [{
+                'mode': 'train',
+                'eps' : 1e-5,
+                'momentum': 0.9
+            } for i in range(self.num_layers - 1)]
+            print(self.bn_params)
+        else:
+            self.bn_params = [{
+                'mode': 'test',
+            } for i in range(self.num_layers - 1)]
         # Cast all parameters to the correct datatype
         for k, v in self.params.items():
             self.params[k] = v.astype(dtype)
@@ -232,7 +243,6 @@ class FullyConnectedNet(object):
 
         """
         X = X.astype(self.dtype)
-        X = np.reshape(X,newshape=(X.shape[0],np.sum(X.shape[1:])))
         mode = 'test' if y is None else 'train'
 
         # Set train/test mode for batchnorm params and dropout param since they
@@ -244,10 +254,12 @@ class FullyConnectedNet(object):
                 bn_param['mode'] = mode
 
         cache = []
-        affined = None
+        affined = X
 
-        for i in range(self.num_layers - 1):
-            affined, tmp = affine_forward(X, self.params['W'+str(i+1)], self.params['b' + str(i + 1)])
+        print('pn_params',self.bn_params)
+        for i in range(self.num_layers-1):
+            print('W',str(i+1))
+            affined, tmp = affine_forward(affined, self.params['W'+str(i+1)], self.params['b' + str(i + 1)])
             cache.append(tmp)
             affined, tmp = batchnorm_forward(
                 affined, gamma=self.params['gamma'+str(i+1)],
@@ -259,7 +271,7 @@ class FullyConnectedNet(object):
             cache.append(tmp)
             affined,tmp = dropout_forward(affined,dropout_param=self.dropout_param)
             cache.append(tmp)
-        affined,tmp = affine_forward(affined,'W'+str(self.num_layers - 1),'b'+str(self.num_layers - 1))
+        affined,tmp = affine_forward(affined,self.params['W'+str(self.num_layers)],self.params['b'+str(self.num_layers)])
         cache.append(tmp)
 
 
